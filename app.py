@@ -1,49 +1,69 @@
+# Import necessary libraries
 from flask import Flask, render_template, request
 from werkzeug.utils import secure_filename
 import openai
 from functions import *
 from dotenv import dotenv_values
 
+# Initialize Flask app
 app = Flask(__name__)
-config = dotenv_values(".env")
 
+# Load API key from .env file
+config = dotenv_values(".env")
 openai.api_key = config['API-KEY']
 
+# Define OpenAI model engine
 model_engine = "text-davinci-003"
 
+# Define the home route
 @app.route('/')
 def home():
+    """Render the main page."""
     return render_template("index.html")
 
-@app.route('/upload',methods=['post'])
+@app.route('/upload', methods=['post'])
 def upload():
+    """Handle file uploads and process them."""
+    
+    # Initialize an empty response
+    response_with_endlines = ""
+    
+    # Check if the request method is POST
     if request.method == 'POST':
+        
+        # Get the uploaded files
         img = request.files.getlist('file')
-
+        
+        # If files are uploaded
         if img:
-            filenames=[]
+            filenames = []
+            
+            # Save each uploaded file and keep track of their names
             for elem in img:
-                filenames.append(secure_filename(elem.filename))
-                elem.save(secure_filename(elem.filename))
-            # filename = secure_filename(img.filename)
-            # img.save(filename)
-            filename='merged'
-            merge_files(filenames,filename)
+                file_name = secure_filename(elem.filename)
+                elem.save(file_name)
+                filenames.append(file_name)
             
-            page_content = textify(filename+'.pdf')
-            page_with_everything = add_prompt(page_content)
+            # Merge files if necessary
+            merged_filename = 'merged'
+            merge_files(filenames, merged_filename)
             
-            # Generate questions using class functions
+            # Convert the merged file to text
+            page_content = textify(merged_filename + '.pdf')
+            
+            # Add a prompt to the content
+            page_with_prompt = add_prompt(page_content)
+            
+            # Use OpenAI to generate questions based on the content
             question_generator = QuestionGenerator(model_engine, openai.api_key)
-            page_with_everything = add_prompt(page_content)
-            # feed into model
-            response = question_generator.generate_questions(page_with_everything, 2048, 0.5, 1, 0, 0)
+            response = question_generator.generate_questions(page_with_prompt, 2048, 0.5, 1, 0, 0)
             
-            response_with_endlines=add_newlines(response)
+            # Format the response for display
+            response_with_endlines = add_newlines(response)
 
-    return render_template("index.html",response = response_with_endlines)
+    # Render the main page with the generated response
+    return render_template("index.html", response=response_with_endlines)
 
-# Run the app
+# Entry point for the app
 if __name__ == "__main__":
-
     app.run(debug=True)
